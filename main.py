@@ -1,3 +1,4 @@
+import tkinter as tk
 import threading
 import os
 import time
@@ -10,9 +11,8 @@ rows = 20
 maze = [[1 for _ in range(columns)] for _ in range(rows)]
 
 # Generates an array of border indices
-border_indices = [(0, j) for j in range(columns)] + [(rows - 1, j) for j in range(columns)] + [(i, 0) for i in
-                                                                                               range(1, rows - 1)] + [
-                     (i, columns - 1) for i in range(1, rows - 1)]
+border_indices = [(0, j) for j in range(columns)] + [(rows - 1, j) for j in range(columns)] + [(i, 0) for i in range(1, rows - 1)] + [(i, columns - 1) for i in range(1, rows - 1)]
+
 # Removes corner indices from the border indices
 corner_indices = []
 border_indices.remove((0, 0))
@@ -23,6 +23,7 @@ border_indices.remove((rows - 1, 0))
 corner_indices.append((rows - 1, 0))
 border_indices.remove((rows - 1, columns - 1))
 corner_indices.append((rows - 1, columns - 1))
+
 # Chooses one of the border indices as the entrance
 entrance = random.choice(border_indices)
 maze[entrance[0]][entrance[1]] = ' '
@@ -30,8 +31,73 @@ maze[entrance[0]][entrance[1]] = ' '
 # Sets the entrance's coordinates as the starting position
 player_pos = entrance
 
-# Creates a lock for the shared resource (player position)
-lock = threading.Lock()
+# Creates a lock for the shared resource (entity position)
+mutex = threading.Lock()
+render_lock = threading.Lock()
+
+# List of enemies' positions
+enemy_positions = []
+
+# Number of enemies
+num_enemies = 10
+
+# Timer variables
+start_time = None
+end_time = None
+
+# Tkinter GUI variables
+CELL_SIZE = 20
+WINDOW_WIDTH = columns * CELL_SIZE
+WINDOW_HEIGHT = rows * CELL_SIZE
+MESSAGE_WIDTH = columns/2 * CELL_SIZE
+MESSAGE_HEIGHT = rows/2 * CELL_SIZE
+WALL_COLOR = "gray"
+PATH_COLOR = "white"
+PLAYER_COLOR = "blue"
+ENEMY_COLOR = "red"
+
+
+# Function to generate the Tkinter GUI
+def generate_gui():
+    exit_pos = return_exit()
+    root = tk.Tk()
+    root.title("Labirynth Laufer")
+    canvas = tk.Canvas(root, width=WINDOW_WIDTH, height=WINDOW_HEIGHT)
+    canvas.pack()
+    while True:
+        with render_lock:
+            canvas.delete("all")
+            for i in range(rows):
+                for j in range(columns):
+                    x0, y0 = j * CELL_SIZE, i * CELL_SIZE
+                    x1, y1 = x0 + CELL_SIZE, y0 + CELL_SIZE
+                    if (i, j) in enemy_positions:
+                        canvas.create_rectangle(x0, y0, x1, y1, fill=ENEMY_COLOR)
+                    elif (i, j) == player_pos:
+                        canvas.create_rectangle(x0, y0, x1, y1, fill=PLAYER_COLOR)
+                    elif maze[i][j] == 1:
+                        canvas.create_rectangle(x0, y0, x1, y1, fill=WALL_COLOR)
+                    else:
+                        canvas.create_rectangle(x0, y0, x1, y1, fill=PATH_COLOR)
+            canvas.update()
+            time.sleep(0.1)
+
+
+# Two messages that should appear at the end of the game
+def win_message():
+    root = tk.Tk()
+    message_canvas = tk.Canvas(root, width=MESSAGE_WIDTH, height=MESSAGE_HEIGHT)
+    message_canvas.pack()
+    message_canvas.create_text(columns * 10, rows * 10, text="Congratulations! You reached the exit.", fill="green", font=("Arial", 14))
+    os._exit(0)
+
+
+def loss_message():
+    root = tk.Tk()
+    message_canvas = tk.Canvas(root, width=MESSAGE_WIDTH, height=MESSAGE_HEIGHT)
+    message_canvas.pack()
+    message_canvas.create_text(columns * 10, rows * 10, text="Game Over! An enemy caught you.", fill="red", font=("Arial", 14))
+    os._exit(0)
 
 
 # A function that returns neighbours of the current index
@@ -191,18 +257,29 @@ def complicate_layout():
                     path.append(element)
 
 
-# Function to render the maze with player inside it
+# Function to render the maze with player and enemies inside it
 def render_maze():
-    lock.acquire()
-    for i in range(rows):
-        for j in range(columns):
-            if (i, j) == player_pos:
-                print('P', end='  ')
-            else:
-                print(maze[i][j], end='  ')
-        print()
-    print("\n")
-    lock.release()
+    with render_lock:
+        os.system('cls' if os.name == 'nt' else 'clear')
+        for i in range(rows):
+            for j in range(columns):
+                if (i, j) in enemy_positions:
+                    print('E', end='  ')
+                elif (i, j) == player_pos:
+                    print('P', end='  ')
+                else:
+                    print(maze[i][j], end='  ')
+            print()
+        print("\n")
+
+
+# Initialize enemies at random positions in the maze
+def initialize_enemies():
+    global enemy_positions
+    while len(enemy_positions) < num_enemies:
+        x, y = random.randint(0, rows - 1), random.randint(0, columns - 1)
+        if maze[x][y] == ' ' and (x, y) != player_pos:
+            enemy_positions.append((x, y))
 
 
 # Function to move the player
@@ -210,12 +287,38 @@ def move_player(dx, dy):
     global player_pos
     new_pos = (player_pos[0] + dx, player_pos[1] + dy)
     if is_valid_move(new_pos):
-        player_pos = new_pos
+        with mutex:
+            player_pos = new_pos
+            render_maze()
+            exit_pos = return_exit()
+            if player_pos == exit_pos:
+                print("Congratulations! You reached the exit.")
+                win_message()
+            if player_pos in enemy_positions:
+                print("Game Over! An enemy caught you.")
+                loss_message()
+
+
+# Function to move enemies
+def move_enemy(enemy_index):
+    global enemy_positions
+    while True:
+        with mutex:
+            if enemy_index < len(enemy_positions):
+                x, y = enemy_positions[enemy_index]
+                possible_moves = [(x + dx, y + dy) for dx, dy in [(-1, 0), (1, 0), (0, -1), (0, 1)] if is_valid_move((x + dx, y + dy))]
+                for move in possible_moves:
+                    if move in enemy_positions:
+                        possible_moves.remove(move)
+                if possible_moves:
+                    new_pos = random.choice(possible_moves)
+                    enemy_positions[enemy_index] = new_pos
+                    for position in enemy_positions:
+                        if position == player_pos:
+                            print("Game Over! An enemy caught you.")
+                            loss_message()
+        time.sleep(2)
         render_maze()
-        exit_pos = return_exit()
-        if player_pos == exit_pos:
-            print("Congratulations! You reached the exit.")
-            os._exit(0)  # Terminate the program
 
 
 # Thread for input handling
@@ -229,7 +332,7 @@ def handle_input():
             move_player(0, -1)
         elif keyboard.is_pressed('d'):
             move_player(0, 1)
-        time.sleep(0.1)
+        time.sleep(0.08)
 
 
 def return_exit():
@@ -246,9 +349,34 @@ def is_valid_move(pos):
     return 0 <= x < rows and 0 <= y < columns and maze[x][y] != 1
 
 
+# Function to start the timer
+def start_timer():
+    global start_time
+    start_time = time.time()
+
+
+# Function to stop the timer
+def stop_timer():
+    global end_time
+    end_time = time.time()
+
+
+# Function to calculate the elapsed time
+def calculate_elapsed_time():
+    elapsed_time = end_time - start_time if start_time and end_time else 0
+    return elapsed_time
+
+
+# Main function
 def main():
     generate_a_path(30, entrance)
     complicate_layout()
+
+    # Initialize enemies
+    initialize_enemies()
+
+    # Start the timer when the game starts
+    start_timer()
 
     # Start rendering the maze
     render_thread = threading.Thread(target=render_maze)
@@ -258,8 +386,31 @@ def main():
     input_thread = threading.Thread(target=handle_input)
     input_thread.start()
 
-    render_thread.join()
+    # Start enemy threads
+    enemy_threads = []
+    for i in range(num_enemies):
+        thread = threading.Thread(target=move_enemy, args=(i,))
+        thread.start()
+        enemy_threads.append(thread)
+
+    # Start GUI thread
+    gui_thread = threading.Thread(target=generate_gui)
+    gui_thread.start()
+
+    # Wait for input thread to finish
     input_thread.join()
+
+    # Wait for rendering and enemy threads to finish
+    render_thread.join()
+    for thread in enemy_threads:
+        thread.join()
+    gui_thread.join()
+
+    # Stop the timer when the game ends
+    stop_timer()
+
+    # Print the elapsed time
+    print("Elapsed Time:", calculate_elapsed_time())
 
 
 if __name__ == "__main__":
