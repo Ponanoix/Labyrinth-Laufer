@@ -62,7 +62,7 @@ ENEMY_COLOR = "red"
 def generate_gui():
     global root, canvas
     root = tk.Tk()
-    root.title("Labyrinth Läufer")
+    root.title("Labyrinth Laufer")
     canvas = tk.Canvas(root, width=WINDOW_WIDTH, height=WINDOW_HEIGHT)
     canvas.pack()
 
@@ -415,7 +415,6 @@ def main():
 
     # Wait for input thread to finish
     input_thread.join()
-    print("input")
 
     # Wait for rendering and enemy threads to finish
     for thread in enemy_threads:
