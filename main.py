@@ -11,7 +11,8 @@ rows = 20
 maze = [[1 for _ in range(columns)] for _ in range(rows)]
 
 # Generates an array of border indices
-border_indices = [(0, j) for j in range(columns)] + [(rows - 1, j) for j in range(columns)] + [(i, 0) for i in range(1, rows - 1)] + [(i, columns - 1) for i in range(1, rows - 1)]
+border_indices = ([(0, j) for j in range(columns)] + [(rows - 1, j) for j in range(columns)]
+                  + [(i, 0) for i in range(1, rows - 1)] + [(i, columns - 1) for i in range(1, rows - 1)])
 
 # Removes corner indices from the border indices
 corner_indices = []
@@ -59,28 +60,41 @@ ENEMY_COLOR = "red"
 
 # Function to generate the Tkinter GUI
 def generate_gui():
-    exit_pos = return_exit()
+    global root, canvas
     root = tk.Tk()
-    root.title("Labirynth Laufer")
+    root.title("Labyrinth Läufer")
     canvas = tk.Canvas(root, width=WINDOW_WIDTH, height=WINDOW_HEIGHT)
     canvas.pack()
-    while True:
-        with render_lock:
-            canvas.delete("all")
-            for i in range(rows):
-                for j in range(columns):
-                    x0, y0 = j * CELL_SIZE, i * CELL_SIZE
-                    x1, y1 = x0 + CELL_SIZE, y0 + CELL_SIZE
-                    if (i, j) in enemy_positions:
-                        canvas.create_rectangle(x0, y0, x1, y1, fill=ENEMY_COLOR)
-                    elif (i, j) == player_pos:
-                        canvas.create_rectangle(x0, y0, x1, y1, fill=PLAYER_COLOR)
-                    elif maze[i][j] == 1:
-                        canvas.create_rectangle(x0, y0, x1, y1, fill=WALL_COLOR)
-                    else:
-                        canvas.create_rectangle(x0, y0, x1, y1, fill=PATH_COLOR)
-            canvas.update()
-            time.sleep(0.1)
+
+    def on_closing():
+        stop_event.set()
+        root.quit()
+        os._exit(0)
+
+    root.protocol("WM_DELETE_WINDOW", on_closing)
+
+    update_gui()
+    root.mainloop()
+
+
+def update_gui():
+    with render_lock:
+        canvas.delete("all")
+        for i in range(rows):
+            for j in range(columns):
+                x0, y0 = j * CELL_SIZE, i * CELL_SIZE
+                x1, y1 = x0 + CELL_SIZE, y0 + CELL_SIZE
+                if (i, j) in enemy_positions:
+                    canvas.create_rectangle(x0, y0, x1, y1, fill=ENEMY_COLOR)
+                elif (i, j) == player_pos:
+                    canvas.create_rectangle(x0, y0, x1, y1, fill=PLAYER_COLOR)
+                elif maze[i][j] == 1:
+                    canvas.create_rectangle(x0, y0, x1, y1, fill=WALL_COLOR)
+                else:
+                    canvas.create_rectangle(x0, y0, x1, y1, fill=PATH_COLOR)
+        canvas.update()
+    if not stop_event.is_set():
+        root.after(100, update_gui)
 
 
 # Two messages that should appear at the end of the game
@@ -88,7 +102,8 @@ def win_message():
     root = tk.Tk()
     message_canvas = tk.Canvas(root, width=MESSAGE_WIDTH, height=MESSAGE_HEIGHT)
     message_canvas.pack()
-    message_canvas.create_text(columns * 10, rows * 10, text="Congratulations! You reached the exit.", fill="green", font=("Arial", 14))
+    message_canvas.create_text(columns * 10, rows * 10,
+                               text="Congratulations! You reached the exit.", fill="green", font=("Arial", 14))
     os._exit(0)
 
 
@@ -96,7 +111,8 @@ def loss_message():
     root = tk.Tk()
     message_canvas = tk.Canvas(root, width=MESSAGE_WIDTH, height=MESSAGE_HEIGHT)
     message_canvas.pack()
-    message_canvas.create_text(columns * 10, rows * 10, text="Game Over! An enemy caught you.", fill="red", font=("Arial", 14))
+    message_canvas.create_text(columns * 10, rows * 10,
+                               text="Game Over! An enemy caught you.", fill="red", font=("Arial", 14))
     os._exit(0)
 
 
@@ -129,7 +145,8 @@ def generate_a_path(length, start):
     dead_end_path = []
     while length != 0:
         # This branch of code activates when the random path generation encounters a dead end
-        condition = lambda node: node in visited_nodes or node in border_indices or node in dead_end_path or node in visited_walls
+        condition = lambda node: (node in visited_nodes or node in border_indices
+                                  or node in dead_end_path or node in visited_walls)
         while all(condition(nodes) for nodes in current_neighbours):
             # Removes current node's walls (that meet the criteria) from visited walls array
             for item in current_neighbours:
@@ -169,7 +186,8 @@ def generate_a_path(length, start):
                             visited_walls.remove(item)
         # Randomised choosing of the next node
         next_node = random.choice(current_neighbours)
-        if next_node not in border_indices and next_node not in visited_nodes and next_node not in corner_indices and next_node not in dead_end_path and next_node not in visited_walls:
+        if (next_node not in border_indices and next_node not in visited_nodes and next_node
+                not in corner_indices and next_node not in dead_end_path and next_node not in visited_walls):
             length -= 1
             for item in current_neighbours:
                 if maze[item[0]][item[1]] == ' ':
@@ -179,11 +197,13 @@ def generate_a_path(length, start):
             current_neighbours = get_neighbours(next_node, rows, columns)
             maze[next_node[0]][next_node[1]] = ' '
 
-    # This branch of code activates when the "length" variable reaches zero. From this point forward the algorithm is allowed to seek an end
+    # This branch of code activates when the "length" variable reaches zero.
+    # From this point forward the algorithm is allowed to seek an end
     while next_node not in border_indices or next_node in corner_indices:
 
         # This branch of code activates when the random path generation encounters a dead end
-        condition = lambda node: node in visited_nodes or node in border_indices or node in dead_end_path or node in visited_walls
+        condition = lambda node: (node in visited_nodes
+                                  or node in border_indices or node in dead_end_path or node in visited_walls)
         while all(condition(nodes) for nodes in current_neighbours):
             # Removes current node's walls (that meet the criteria) from visited walls array
             for item in current_neighbours:
@@ -227,7 +247,8 @@ def generate_a_path(length, start):
         if next_node in border_indices and next_node not in visited_nodes and next_node not in visited_walls:
             maze[next_node[0]][next_node[1]] = ' '
             break
-        elif next_node not in border_indices and next_node not in visited_nodes and next_node not in corner_indices and next_node not in visited_walls:
+        elif (next_node not in border_indices and next_node not in visited_nodes
+              and next_node not in corner_indices and next_node not in visited_walls):
             for neighbour in current_neighbours:
                 visited_nodes.append(neighbour)
             current_neighbours = get_neighbours(next_node, rows, columns)
@@ -257,22 +278,6 @@ def complicate_layout():
                     path.append(element)
 
 
-# Function to render the maze with player and enemies inside it
-def render_maze():
-    with render_lock:
-        os.system('cls' if os.name == 'nt' else 'clear')
-        for i in range(rows):
-            for j in range(columns):
-                if (i, j) in enemy_positions:
-                    print('E', end='  ')
-                elif (i, j) == player_pos:
-                    print('P', end='  ')
-                else:
-                    print(maze[i][j], end='  ')
-            print()
-        print("\n")
-
-
 # Initialize enemies at random positions in the maze
 def initialize_enemies():
     global enemy_positions
@@ -282,6 +287,39 @@ def initialize_enemies():
             enemy_positions.append((x, y))
 
 
+# Thread for input handling
+def handle_input():
+    keys_state = {'w': False, 'a': False, 's': False, 'd': False}
+    # 50 milliseconds debounce time
+    debounce_time = 0.05
+    while True:
+        for key, state in keys_state.items():
+            if keyboard.is_pressed(key) and not state:
+                if key == 'w':
+                    move_player(-1, 0)
+                elif key == 'a':
+                    move_player(0, -1)
+                elif key == 's':
+                    move_player(1, 0)
+                elif key == 'd':
+                    move_player(0, 1)
+                keys_state[key] = True
+                time.sleep(debounce_time)
+            elif not keyboard.is_pressed(key):
+                keys_state[key] = False
+        # Checks for input every 10 milliseconds (100 Hz)
+        time.sleep(0.01)
+
+
+def return_exit():
+    global end
+    for element in border_indices:
+        if maze[element[0]][element[1]] == ' ' and element != entrance:
+            end = element
+            break
+    return end
+
+
 # Function to move the player
 def move_player(dx, dy):
     global player_pos
@@ -289,7 +327,6 @@ def move_player(dx, dy):
     if is_valid_move(new_pos):
         with mutex:
             player_pos = new_pos
-            render_maze()
             exit_pos = return_exit()
             if player_pos == exit_pos:
                 print("Congratulations! You reached the exit.")
@@ -306,7 +343,8 @@ def move_enemy(enemy_index):
         with mutex:
             if enemy_index < len(enemy_positions):
                 x, y = enemy_positions[enemy_index]
-                possible_moves = [(x + dx, y + dy) for dx, dy in [(-1, 0), (1, 0), (0, -1), (0, 1)] if is_valid_move((x + dx, y + dy))]
+                possible_moves = [(x + dx, y + dy) for dx, dy
+                                  in [(-1, 0), (1, 0), (0, -1), (0, 1)] if is_valid_move((x + dx, y + dy))]
                 for move in possible_moves:
                     if move in enemy_positions:
                         possible_moves.remove(move)
@@ -318,29 +356,6 @@ def move_enemy(enemy_index):
                             print("Game Over! An enemy caught you.")
                             loss_message()
         time.sleep(2)
-        render_maze()
-
-
-# Thread for input handling
-def handle_input():
-    while True:
-        if keyboard.is_pressed('w'):
-            move_player(-1, 0)
-        elif keyboard.is_pressed('s'):
-            move_player(1, 0)
-        elif keyboard.is_pressed('a'):
-            move_player(0, -1)
-        elif keyboard.is_pressed('d'):
-            move_player(0, 1)
-        time.sleep(0.08)
-
-
-def return_exit():
-    for element in border_indices:
-        if maze[element[0]][element[1]] == ' ' and element != entrance:
-            end = element
-            break
-    return end
 
 
 # Function to check if the move is valid
@@ -369,18 +384,19 @@ def calculate_elapsed_time():
 
 # Main function
 def main():
+    global stop_event
+    stop_event = threading.Event()
+
+    # Create the maze itself
     generate_a_path(30, entrance)
     complicate_layout()
 
     # Initialize enemies
     initialize_enemies()
 
-    # Start the timer when the game starts
-    start_timer()
-
-    # Start rendering the maze
-    render_thread = threading.Thread(target=render_maze)
-    render_thread.start()
+    # Start GUI thread
+    gui_thread = threading.Thread(target=generate_gui)
+    gui_thread.start()
 
     # Start input handling thread
     input_thread = threading.Thread(target=handle_input)
@@ -392,16 +408,16 @@ def main():
         thread = threading.Thread(target=move_enemy, args=(i,))
         thread.start()
         enemy_threads.append(thread)
+        time.sleep(0.5)
 
-    # Start GUI thread
-    gui_thread = threading.Thread(target=generate_gui)
-    gui_thread.start()
+    # Start the timer when the game starts
+    start_timer()
 
     # Wait for input thread to finish
     input_thread.join()
+    print("input")
 
     # Wait for rendering and enemy threads to finish
-    render_thread.join()
     for thread in enemy_threads:
         thread.join()
     gui_thread.join()
