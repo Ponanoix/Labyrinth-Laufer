@@ -50,8 +50,8 @@ end_time = None
 CELL_SIZE = 20
 WINDOW_WIDTH = columns * CELL_SIZE
 WINDOW_HEIGHT = rows * CELL_SIZE
-MESSAGE_WIDTH = columns/2 * CELL_SIZE
-MESSAGE_HEIGHT = rows/2 * CELL_SIZE
+MESSAGE_WIDTH = WINDOW_WIDTH
+MESSAGE_HEIGHT = WINDOW_HEIGHT
 WALL_COLOR = "gray"
 PATH_COLOR = "white"
 PLAYER_COLOR = "blue"
@@ -60,11 +60,14 @@ ENEMY_COLOR = "red"
 
 # Function to generate the Tkinter GUI
 def generate_gui():
-    global root, canvas
+    global root, canvas, timer_label
     root = tk.Tk()
     root.title("Labyrinth Laufer")
     canvas = tk.Canvas(root, width=WINDOW_WIDTH, height=WINDOW_HEIGHT)
     canvas.pack()
+
+    timer_label = tk.Label(root, text="Time: 0.0", font=("Arial", 14))
+    timer_label.pack()
 
     def on_closing():
         stop_event.set()
@@ -92,28 +95,43 @@ def update_gui():
                     canvas.create_rectangle(x0, y0, x1, y1, fill=WALL_COLOR)
                 else:
                     canvas.create_rectangle(x0, y0, x1, y1, fill=PATH_COLOR)
+
+        if start_time:
+            elapsed_time = time.time() - start_time
+            timer_label.config(text=f"Time: {elapsed_time:.1f}")
+
         canvas.update()
     if not stop_event.is_set():
         root.after(100, update_gui)
 
 
+def message_window(text, color, elapsed_time):
+    message_root = tk.Toplevel(root)
+    message_canvas = tk.Canvas(message_root, width=MESSAGE_WIDTH, height=MESSAGE_HEIGHT)
+    message_canvas.pack()
+    message_canvas.create_text(MESSAGE_WIDTH // 2, MESSAGE_HEIGHT // 2,
+                               text=f"{text}\nElapsed Time: {elapsed_time:.1f} seconds", fill=color, font=("Arial", 14), anchor='center')
+
+    def close_message():
+        message_root.destroy()
+        root.quit()
+
+    message_root.after(3000, close_message)
+
+
 # Two messages that should appear at the end of the game
 def win_message():
-    root = tk.Tk()
-    message_canvas = tk.Canvas(root, width=MESSAGE_WIDTH, height=MESSAGE_HEIGHT)
-    message_canvas.pack()
-    message_canvas.create_text(columns * 10, rows * 10,
-                               text="Congratulations! You reached the exit.", fill="green", font=("Arial", 14))
-    os._exit(0)
+    stop_timer()
+    elapsed_time = calculate_elapsed_time()
+    message_window("Congratulations! You reached the exit.", "green", elapsed_time)
+    stop_event.set()
 
 
 def loss_message():
-    root = tk.Tk()
-    message_canvas = tk.Canvas(root, width=MESSAGE_WIDTH, height=MESSAGE_HEIGHT)
-    message_canvas.pack()
-    message_canvas.create_text(columns * 10, rows * 10,
-                               text="Game Over! An enemy caught you.", fill="red", font=("Arial", 14))
-    os._exit(0)
+    stop_timer()
+    elapsed_time = calculate_elapsed_time()
+    message_window("Game Over! An enemy caught you.", "red", elapsed_time)
+    stop_event.set()
 
 
 # A function that returns neighbours of the current index
@@ -324,16 +342,18 @@ def return_exit():
 def move_player(dx, dy):
     global player_pos
     new_pos = (player_pos[0] + dx, player_pos[1] + dy)
+    exit_pos = return_exit()
     if is_valid_move(new_pos):
         with mutex:
             player_pos = new_pos
-            exit_pos = return_exit()
             if player_pos == exit_pos:
-                print("Congratulations! You reached the exit.")
                 win_message()
+                time.sleep(3)
+                os._exit(0)
             if player_pos in enemy_positions:
-                print("Game Over! An enemy caught you.")
                 loss_message()
+                time.sleep(3)
+                os._exit(0)
 
 
 # Function to move enemies
@@ -353,8 +373,9 @@ def move_enemy(enemy_index):
                     enemy_positions[enemy_index] = new_pos
                     for position in enemy_positions:
                         if position == player_pos:
-                            print("Game Over! An enemy caught you.")
                             loss_message()
+                            time.sleep(3)
+                            os._exit(0)
         time.sleep(2)
 
 
@@ -391,6 +412,9 @@ def main():
     generate_a_path(30, entrance)
     complicate_layout()
 
+    # Start the timer when the game starts
+    start_timer()
+
     # Initialize enemies
     initialize_enemies()
 
@@ -410,9 +434,6 @@ def main():
         enemy_threads.append(thread)
         time.sleep(0.5)
 
-    # Start the timer when the game starts
-    start_timer()
-
     # Wait for input thread to finish
     input_thread.join()
 
@@ -420,12 +441,6 @@ def main():
     for thread in enemy_threads:
         thread.join()
     gui_thread.join()
-
-    # Stop the timer when the game ends
-    stop_timer()
-
-    # Print the elapsed time
-    print("Elapsed Time:", calculate_elapsed_time())
 
 
 if __name__ == "__main__":
