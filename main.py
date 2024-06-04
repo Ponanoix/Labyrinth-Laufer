@@ -6,8 +6,8 @@ import keyboard
 import random
 
 # Defines the maze's outline
-columns = 20
-rows = 20
+columns = 35
+rows = 35
 maze = [[1 for _ in range(columns)] for _ in range(rows)]
 
 # Generates an array of border indices
@@ -409,7 +409,7 @@ def main():
     stop_event = threading.Event()
 
     # Create the maze itself
-    generate_a_path(30, entrance)
+    generate_a_path(40, entrance)
     complicate_layout()
 
     # Start the timer when the game starts
