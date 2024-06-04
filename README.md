@@ -7,7 +7,7 @@ The program has a number of threads and critical sections.
 
 The threads are as follows:
 - **Input thread**: This thread monitors keyboard input from the player
-- **Gui thread**: This thread renders GUI and updates it each time something moves
+- **Gui thread**: This thread renders GUI and constantly updates it, including timer and entity movement
 - **Enemy threads**: These threads are responsible for moving the enemies across the maze.
     The number of threads is equal to the number of enemies.
 
