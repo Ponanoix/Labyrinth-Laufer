@@ -11,6 +11,6 @@ The threads are as follows:
 - **Enemy threads**: These threads are responsible for moving the enemies across the maze.
     The number of threads is equal to the number of enemies.
 
-There are also two critical sections implemented:
-- One mutex, when the player moves
-- Other mutex each time an enemy moves
+There are also two critical sections implemented, two mutex variables:
+- One mutex, when the player moves or an enemy moves
+- Another mutex makes sure the GUI gets rendered properly
